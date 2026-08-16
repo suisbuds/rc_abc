@@ -34,6 +34,6 @@ description: Implement, review, and verify scoped changes in the rc_abc Go notif
 ## Hand off
 
 1. Summarize files changed, decisions, verification, unverified items, and remaining risks.
-2. Create a local Chinese audit note under `docs/session/` from `docs/session/TEMPLATE.md` for material implementation tasks.
+2. When `docs/session/TEMPLATE.md` exists, create a local Chinese audit note for material implementation tasks.
 3. Stage, commit, or push only when the user requests Git operations for the current task.
 4. Preserve unrelated user changes and avoid destructive Git commands.

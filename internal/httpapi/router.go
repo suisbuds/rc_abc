@@ -49,8 +49,8 @@ func NewRouter(logger *zap.Logger, readiness ReadinessCheck, apiToken string, se
 
 func bearerAuth(apiToken string) gin.HandlerFunc {
 	return func(c *gin.Context) {
-		provided := strings.TrimPrefix(c.GetHeader("Authorization"), "Bearer ")
-		valid := apiToken != "" && provided != "" &&
+		scheme, provided, hasCredentials := strings.Cut(c.GetHeader("Authorization"), " ")
+		valid := hasCredentials && strings.EqualFold(scheme, "Bearer") && apiToken != "" && provided != "" &&
 			subtle.ConstantTimeCompare([]byte(provided), []byte(apiToken)) == 1
 		if !valid {
 			c.AbortWithStatusJSON(http.StatusUnauthorized, errorResponse("unauthorized", "valid bearer token required"))
@@ -82,8 +82,8 @@ func requestLogger(logger *zap.Logger) gin.HandlerFunc {
 }
 
 func recoveryMiddleware(logger *zap.Logger) gin.HandlerFunc {
-	return gin.CustomRecovery(func(c *gin.Context, recovered any) {
-		logger.Error("http panic recovered", zap.Any("panic", recovered))
+	return gin.CustomRecovery(func(c *gin.Context, _ any) {
+		logger.Error("http panic recovered", zap.Stack("stack"))
 		c.AbortWithStatusJSON(http.StatusInternalServerError, errorResponse("internal_error", "internal server error"))
 	})
 }

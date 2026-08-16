@@ -13,7 +13,7 @@ LOAD_ENV := set -a; if [ -f .env ]; then . ./.env; fi; set +a;
 
 .PHONY: help setup tools up down migrate migrate-down migrate-status run demo demo-down \
 	fmt fmt-check generate generate-check lint test test-unit test-race test-integration \
-	test-e2e vuln secrets build docker-build verify ci agent-preflight agent-summary
+	test-e2e vuln secrets build docker-build verify ci agent-preflight
 
 help: ## Show available commands.
 	@awk 'BEGIN {FS = ":.*## "; printf "Usage: make <target>\n\n"} /^[a-zA-Z0-9_-]+:.*## / {printf "  %-20s %s\n", $$1, $$2}' $(MAKEFILE_LIST)
@@ -79,7 +79,7 @@ test-race: ## Run unit tests with the race detector.
 	go test -race -short ./...
 
 test-integration: ## Run PostgreSQL integration tests.
-	go test -tags=integration ./...
+	RC_ENV=test go test -tags=integration ./...
 
 test-e2e: up ## Run the complete local end-to-end test with PostgreSQL.
 	RC_DATABASE_URL=$(LOCAL_TEST_DATABASE_URL) go run ./cmd/rc migrate up
@@ -90,6 +90,7 @@ vuln: ## Check Go dependencies for known vulnerabilities.
 
 secrets: ## Scan the working tree for secrets.
 	$(TOOLS_DIR)/gitleaks dir --no-banner --redact --config .gitleaks.toml .
+	$(TOOLS_DIR)/gitleaks git --no-banner --redact --config .gitleaks.toml .
 
 build: ## Build application and demo binaries.
 	mkdir -p bin
@@ -102,11 +103,7 @@ docker-build: ## Build the container image.
 verify: fmt-check lint test-race build ## Run the required local quality gate.
 	git diff --check
 
-ci: verify test-integration vuln secrets docker-build ## Reproduce the CI quality gate.
+ci: verify test-e2e test-integration vuln secrets docker-build ## Run the complete local quality gate.
 
 agent-preflight: ## Show repository state before an agent task.
 	scripts/agent-preflight.sh
-
-agent-summary: ## Create a local session summary. Usage: make agent-summary TASK=slug
-	@test -n "$(TASK)" || (echo "TASK is required" >&2; exit 1)
-	scripts/agent-summary.sh "$(TASK)"

@@ -214,6 +214,9 @@ func TestNotificationRepositoryExpiresLeaseAfterFinalAttempt(t *testing.T) {
 
 func integrationPool(t *testing.T) *pgxpool.Pool {
 	t.Helper()
+	if os.Getenv("RC_ENV") != "test" {
+		t.Fatal("integration tests require RC_ENV=test because they truncate notification_tasks")
+	}
 	databaseURL := os.Getenv("RC_DATABASE_URL")
 	if databaseURL == "" {
 		databaseURL = "postgres://rc:rc@localhost:5432/rc?sslmode=disable"

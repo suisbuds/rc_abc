@@ -1,12 +1,12 @@
 package httpclient
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"io"
 	"net"
 	"net/http"
-	"strings"
 	"time"
 
 	"github.com/suisbuds/rc_abc/internal/notification"
@@ -25,7 +25,6 @@ const (
 type ErrorCode string
 
 const (
-	ErrorNone       ErrorCode = ""
 	ErrorTimeout    ErrorCode = "timeout"
 	ErrorNetwork    ErrorCode = "network_error"
 	ErrorHTTPStatus ErrorCode = "http_status"
@@ -51,7 +50,7 @@ func New(timeout time.Duration) *Client {
 }
 
 func (c *Client) Deliver(ctx context.Context, task notification.Task) Outcome {
-	request, err := http.NewRequestWithContext(ctx, task.Method, task.TargetURL, strings.NewReader(string(task.Body)))
+	request, err := http.NewRequestWithContext(ctx, task.Method, task.TargetURL, bytes.NewReader(task.Body))
 	if err != nil {
 		return Outcome{Kind: OutcomePermanentFailure, ErrorCode: ErrorNetwork}
 	}

@@ -180,6 +180,9 @@ func decodeTask(t *testing.T, reader io.Reader) taskResponse {
 
 func localPool(t *testing.T) *pgxpool.Pool {
 	t.Helper()
+	if os.Getenv("RC_ENV") != "test" {
+		t.Fatal("end-to-end tests require RC_ENV=test because they truncate notification_tasks")
+	}
 	databaseURL := os.Getenv("RC_DATABASE_URL")
 	if databaseURL == "" {
 		databaseURL = "postgres://rc:rc@localhost:5432/rc?sslmode=disable"
