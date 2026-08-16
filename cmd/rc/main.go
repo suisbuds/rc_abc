@@ -14,6 +14,7 @@ import (
 	"github.com/suisbuds/rc_abc/internal/httpapi"
 	"github.com/suisbuds/rc_abc/internal/logging"
 	"github.com/suisbuds/rc_abc/internal/migration"
+	"github.com/suisbuds/rc_abc/internal/notification"
 	"github.com/suisbuds/rc_abc/internal/store/postgres"
 	"go.uber.org/zap"
 )
@@ -40,6 +41,13 @@ func run() error {
 	if len(os.Args) >= 2 && os.Args[1] != "serve" {
 		return fmt.Errorf("unknown command %q", os.Args[1])
 	}
+	if err := cfg.ValidateServerSecrets(); err != nil {
+		return err
+	}
+	headerCipher, err := postgres.NewHeaderCipher(cfg.HeaderEncryptionKey)
+	if err != nil {
+		return err
+	}
 
 	logger, err := logging.New(cfg.LogLevel, cfg.LogFormat)
 	if err != nil {
@@ -56,11 +64,15 @@ func run() error {
 	}
 	defer pool.Close()
 
-	router := httpapi.NewRouter(logger, pool.Ping)
+	repository := postgres.NewNotificationRepository(pool, headerCipher)
+	notificationService := notification.NewService(repository, cfg.AllowHTTPDelivery())
+	router := httpapi.NewRouter(logger, pool.Ping, cfg.APIToken, notificationService)
 	server := &http.Server{
 		Addr:              cfg.HTTPAddress,
 		Handler:           router,
 		ReadHeaderTimeout: 5 * time.Second,
+		ReadTimeout:       10 * time.Second,
+		WriteTimeout:      10 * time.Second,
 		IdleTimeout:       60 * time.Second,
 	}
 

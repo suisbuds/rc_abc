@@ -44,3 +44,27 @@ func TestValidateRejectsLeaseShorterThanDeliveryTimeout(t *testing.T) {
 		t.Fatal("Validate() error = nil, want lease validation error")
 	}
 }
+
+func TestValidateServerSecrets(t *testing.T) {
+	cfg := Config{}
+	if err := cfg.ValidateServerSecrets(); err == nil {
+		t.Fatal("ValidateServerSecrets() error = nil, want missing token error")
+	}
+	cfg.APIToken = "internal-token"
+	if err := cfg.ValidateServerSecrets(); err == nil {
+		t.Fatal("ValidateServerSecrets() error = nil, want missing encryption key error")
+	}
+	cfg.HeaderEncryptionKey = "configured"
+	if err := cfg.ValidateServerSecrets(); err != nil {
+		t.Fatalf("ValidateServerSecrets() error = %v", err)
+	}
+}
+
+func TestAllowHTTPDelivery(t *testing.T) {
+	if !(Config{Environment: "development"}).AllowHTTPDelivery() {
+		t.Fatal("development should allow HTTP delivery")
+	}
+	if (Config{Environment: "production"}).AllowHTTPDelivery() {
+		t.Fatal("production should require HTTPS delivery")
+	}
+}

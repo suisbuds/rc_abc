@@ -33,6 +33,7 @@ services:
       RC_HTTP_ADDR: :8080
       RC_DATABASE_URL: postgres://rc:rc@postgres:5432/rc?sslmode=disable
       RC_API_TOKEN: demo-internal-token
+      RC_HEADER_ENCRYPTION_KEY: MDEyMzQ1Njc4OTAxMjM0NTY3ODkwMTIzNDU2Nzg5MDE=
       RC_LOG_LEVEL: info
       RC_LOG_FORMAT: json
     ports:

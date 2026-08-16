@@ -9,36 +9,38 @@ import (
 )
 
 type Config struct {
-	Environment       string
-	HTTPAddress       string
-	DatabaseURL       string
-	APIToken          string
-	LogLevel          string
-	LogFormat         string
-	WorkerConcurrency int
-	DeliveryTimeout   time.Duration
-	PollInterval      time.Duration
-	LeaseDuration     time.Duration
-	MaxAttempts       int
-	BaseBackoff       time.Duration
-	MaxBackoff        time.Duration
+	Environment         string
+	HTTPAddress         string
+	DatabaseURL         string
+	APIToken            string
+	HeaderEncryptionKey string
+	LogLevel            string
+	LogFormat           string
+	WorkerConcurrency   int
+	DeliveryTimeout     time.Duration
+	PollInterval        time.Duration
+	LeaseDuration       time.Duration
+	MaxAttempts         int
+	BaseBackoff         time.Duration
+	MaxBackoff          time.Duration
 }
 
 func Load() (Config, error) {
 	cfg := Config{
-		Environment:       envOrDefault("RC_ENV", "development"),
-		HTTPAddress:       envOrDefault("RC_HTTP_ADDR", ":8080"),
-		DatabaseURL:       envOrDefault("RC_DATABASE_URL", "postgres://rc:rc@localhost:5432/rc?sslmode=disable"),
-		APIToken:          os.Getenv("RC_API_TOKEN"),
-		LogLevel:          envOrDefault("RC_LOG_LEVEL", "info"),
-		LogFormat:         envOrDefault("RC_LOG_FORMAT", "json"),
-		WorkerConcurrency: 4,
-		DeliveryTimeout:   5 * time.Second,
-		PollInterval:      500 * time.Millisecond,
-		LeaseDuration:     30 * time.Second,
-		MaxAttempts:       10,
-		BaseBackoff:       5 * time.Second,
-		MaxBackoff:        15 * time.Minute,
+		Environment:         envOrDefault("RC_ENV", "development"),
+		HTTPAddress:         envOrDefault("RC_HTTP_ADDR", ":8080"),
+		DatabaseURL:         envOrDefault("RC_DATABASE_URL", "postgres://rc:rc@localhost:5432/rc?sslmode=disable"),
+		APIToken:            os.Getenv("RC_API_TOKEN"),
+		HeaderEncryptionKey: os.Getenv("RC_HEADER_ENCRYPTION_KEY"),
+		LogLevel:            envOrDefault("RC_LOG_LEVEL", "info"),
+		LogFormat:           envOrDefault("RC_LOG_FORMAT", "json"),
+		WorkerConcurrency:   4,
+		DeliveryTimeout:     5 * time.Second,
+		PollInterval:        500 * time.Millisecond,
+		LeaseDuration:       30 * time.Second,
+		MaxAttempts:         10,
+		BaseBackoff:         5 * time.Second,
+		MaxBackoff:          15 * time.Minute,
 	}
 
 	var err error
@@ -68,6 +70,20 @@ func Load() (Config, error) {
 		return Config{}, err
 	}
 	return cfg, nil
+}
+
+func (c Config) ValidateServerSecrets() error {
+	if c.APIToken == "" {
+		return errors.New("RC_API_TOKEN must not be empty when serving HTTP requests")
+	}
+	if c.HeaderEncryptionKey == "" {
+		return errors.New("RC_HEADER_ENCRYPTION_KEY must not be empty when serving HTTP requests")
+	}
+	return nil
+}
+
+func (c Config) AllowHTTPDelivery() bool {
+	return c.Environment == "development" || c.Environment == "test"
 }
 
 func (c Config) Validate() error {

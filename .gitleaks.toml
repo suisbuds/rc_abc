@@ -1,0 +1,10 @@
+[extend]
+useDefault = true
+
+[[allowlists]]
+description = "Known development-only fixtures"
+regexTarget = "secret"
+regexes = [
+  '''MDEyMzQ1Njc4OTAxMjM0NTY3ODkwMTIzNDU2Nzg5MDE=''',
+  '''replace-me''',
+]

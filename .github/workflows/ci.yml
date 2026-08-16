@@ -28,6 +28,7 @@ jobs:
     env:
       RC_DATABASE_URL: postgres://rc:rc@localhost:5432/rc?sslmode=disable
       RC_API_TOKEN: ci-internal-token
+      RC_HEADER_ENCRYPTION_KEY: MDEyMzQ1Njc4OTAxMjM0NTY3ODkwMTIzNDU2Nzg5MDE=
     steps:
       - uses: actions/checkout@v4
         with:

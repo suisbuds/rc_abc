@@ -11,7 +11,7 @@ import (
 )
 
 func TestHealth(t *testing.T) {
-	router := NewRouter(zap.NewNop(), func(_ context.Context) error { return nil })
+	router := NewRouter(zap.NewNop(), func(_ context.Context) error { return nil }, "test-token", nil)
 	request := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/healthz", nil)
 	response := httptest.NewRecorder()
 
@@ -23,7 +23,7 @@ func TestHealth(t *testing.T) {
 }
 
 func TestReadinessFailure(t *testing.T) {
-	router := NewRouter(zap.NewNop(), func(_ context.Context) error { return errors.New("database unavailable") })
+	router := NewRouter(zap.NewNop(), func(_ context.Context) error { return errors.New("database unavailable") }, "test-token", nil)
 	request := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/readyz", nil)
 	response := httptest.NewRecorder()
 

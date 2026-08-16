@@ -8,6 +8,7 @@ MOCKGEN_VERSION := v0.6.0
 GOLANGCI_LINT_VERSION := v2.12.2
 GOVULNCHECK_VERSION := v1.7.0
 GITLEAKS_VERSION := v8.30.1
+LOAD_ENV := set -a; if [ -f .env ]; then . ./.env; fi; set +a;
 
 .PHONY: help setup tools up down migrate migrate-down migrate-status run demo demo-down \
 	fmt fmt-check generate generate-check lint test test-unit test-race test-integration \
@@ -35,16 +36,16 @@ down: ## Stop local containers.
 	docker compose down
 
 migrate: ## Apply all database migrations.
-	go run ./cmd/rc migrate up
+	$(LOAD_ENV) go run ./cmd/rc migrate up
 
 migrate-down: ## Roll back one database migration.
-	go run ./cmd/rc migrate down
+	$(LOAD_ENV) go run ./cmd/rc migrate down
 
 migrate-status: ## Show database migration status.
-	go run ./cmd/rc migrate status
+	$(LOAD_ENV) go run ./cmd/rc migrate status
 
 run: ## Run the API and worker process.
-	go run ./cmd/rc serve
+	$(LOAD_ENV) go run ./cmd/rc serve
 
 demo: ## Start the containerized demo stack.
 	docker compose --profile demo up --build
@@ -86,7 +87,7 @@ vuln: ## Check Go dependencies for known vulnerabilities.
 	$(TOOLS_DIR)/govulncheck ./...
 
 secrets: ## Scan the working tree for secrets.
-	$(TOOLS_DIR)/gitleaks dir --no-banner --redact .
+	$(TOOLS_DIR)/gitleaks dir --no-banner --redact --config .gitleaks.toml .
 
 build: ## Build application and demo binaries.
 	mkdir -p bin
