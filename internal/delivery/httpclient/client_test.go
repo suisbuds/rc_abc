@@ -105,3 +105,43 @@ func TestClientDeliverDoesNotFollowRedirects(t *testing.T) {
 		t.Fatalf("Deliver() = %+v, want permanent redirect failure", outcome)
 	}
 }
+
+func TestClientDeliverReadsRetryAfter(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Retry-After", "120")
+		w.WriteHeader(http.StatusTooManyRequests)
+	}))
+	defer server.Close()
+
+	outcome := New(time.Second).Deliver(context.Background(), notification.Task{
+		TargetURL: server.URL,
+		Method:    http.MethodPost,
+		Body:      json.RawMessage(`{}`),
+	})
+	if outcome.Kind != OutcomeRetryable || outcome.RetryAfter != 2*time.Minute {
+		t.Fatalf("Deliver() = %+v, want retryable after 2m", outcome)
+	}
+}
+
+func TestParseRetryAfter(t *testing.T) {
+	now := time.Date(2026, 8, 16, 12, 0, 0, 0, time.UTC)
+	tests := []struct {
+		name  string
+		value string
+		want  time.Duration
+	}{
+		{name: "seconds", value: "30", want: 30 * time.Second},
+		{name: "http date", value: now.Add(45 * time.Second).Format(http.TimeFormat), want: 45 * time.Second},
+		{name: "expired date", value: now.Add(-time.Second).Format(http.TimeFormat)},
+		{name: "invalid", value: "later"},
+		{name: "negative", value: "-1"},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			if got := parseRetryAfter(test.value, now); got != test.want {
+				t.Fatalf("parseRetryAfter(%q) = %s, want %s", test.value, got, test.want)
+			}
+		})
+	}
+}

@@ -8,7 +8,7 @@ description: Implement, review, and verify scoped changes in the rc_abc Go notif
 ## Prepare
 
 1. Read `AGENTS.md` completely.
-2. Read `docs/design.md` when it exists and the task affects architecture or behavior.
+2. Read `docs/DESIGN.md` when it exists and the task affects architecture or behavior.
 3. Run `make agent-preflight`.
 4. Inspect the relevant implementation and tests before editing.
 
@@ -19,7 +19,7 @@ description: Implement, review, and verify scoped changes in the rc_abc Go notif
 3. Keep handlers, domain logic, persistence, delivery, and worker coordination in their assigned packages.
 4. Write code, configuration, comments, commit messages, and repository automation in English.
 5. Write content under `docs/` in Chinese.
-6. Do not modify `docs/help.md` unless the user explicitly asks.
+6. Do not modify `docs/HELP.md` unless the user explicitly asks.
 7. Never place credentials, complete authorization headers, or sensitive request bodies in code, logs, fixtures, or session notes.
 
 ## Verify

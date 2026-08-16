@@ -86,19 +86,28 @@ func (w *Worker) runOne(ctx context.Context, owner string) {
 		processed, err := w.processOne(ctx, owner)
 		if err != nil {
 			w.logger.Error("worker iteration failed", zap.String("lease_owner", owner), zap.Error(err))
+			if !w.waitForPoll(ctx) {
+				return
+			}
+			continue
 		}
 		if processed {
 			continue
 		}
-		timer := time.NewTimer(w.pollInterval)
-		select {
-		case <-ctx.Done():
-			if !timer.Stop() {
-				<-timer.C
-			}
+		if !w.waitForPoll(ctx) {
 			return
-		case <-timer.C:
 		}
+	}
+}
+
+func (w *Worker) waitForPoll(ctx context.Context) bool {
+	timer := time.NewTimer(w.pollInterval)
+	defer timer.Stop()
+	select {
+	case <-ctx.Done():
+		return false
+	case <-timer.C:
+		return true
 	}
 }
 
@@ -112,7 +121,9 @@ func (w *Worker) processOne(ctx context.Context, owner string) (bool, error) {
 	}
 
 	deliveryCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), w.deliveryTimeout)
+	deliveryStartedAt := time.Now()
 	outcome := w.deliverer.Deliver(deliveryCtx, task)
+	deliveryDuration := time.Since(deliveryStartedAt)
 	cancel()
 
 	completedAt := w.now()
@@ -130,8 +141,12 @@ func (w *Worker) processOne(ctx context.Context, owner string) (bool, error) {
 	w.logger.Info("notification delivery attempt finished",
 		zap.String("notification_id", task.ID.String()),
 		zap.String("status", string(completion.Status)),
+		zap.String("outcome", string(outcome.Kind)),
+		zap.String("error_code", string(outcome.ErrorCode)),
 		zap.Int("attempt", task.AttemptCount),
 		zap.Int("http_status", outcome.HTTPStatus),
+		zap.Duration("delivery_duration", deliveryDuration),
+		zap.Duration("retry_after", outcome.RetryAfter),
 	)
 	return true, nil
 }
@@ -145,7 +160,11 @@ func (w *Worker) completion(task notification.Task, owner string, outcome httpcl
 		lastError = &errorCode
 		if outcome.Kind == httpclient.OutcomeRetryable && task.AttemptCount < w.maxAttempts {
 			status = notification.StatusRetryWait
-			nextAttemptAt = now.Add(w.backoff.Delay(task.AttemptCount, w.random()))
+			delay := w.backoff.Delay(task.AttemptCount, w.random())
+			if outcome.RetryAfter > delay {
+				delay = outcome.RetryAfter
+			}
+			nextAttemptAt = now.Add(delay)
 		} else {
 			status = notification.StatusDead
 		}

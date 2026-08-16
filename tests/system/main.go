@@ -219,7 +219,7 @@ func (r runner) runLoad(total, concurrency int) error {
 		acceptedIn.Round(time.Millisecond), completedIn.Round(time.Millisecond), totalDuration.Round(time.Millisecond),
 		float64(total)/acceptedIn.Seconds())
 	fmt.Printf("%s\n", paint(ansiGreen, fmt.Sprintf("ASSERT accepted=%d succeeded=%d dead=0: PASS", total, total)))
-	fmt.Println(paint(ansiYellow, "PROVES this run completed concurrent submission and delivery without losing or killing any task"))
+	fmt.Println(paint(ansiYellow, "VERIFIES this run completed concurrent submission and delivery without losing or killing any task"))
 	fmt.Println(paint(ansiGreen, fmt.Sprintf("ALL TEST PASS total=%d concurrency=%d succeeded=%d dead=0", total, concurrency, total)))
 	return nil
 }
@@ -358,13 +358,13 @@ func printOutput(result response) {
 
 func printPass(assertion, proof string) {
 	fmt.Println(paint(ansiGreen, "ASSERT "+assertion+": PASS"))
-	fmt.Println(paint(ansiYellow, "PROVES "+proof))
+	fmt.Println(paint(ansiYellow, "VERIFIES "+proof))
 }
 
 func printLegend() {
 	fmt.Printf("%s %s | %s | %s | %s\n",
 		paint(ansiBoldCyan, "COLOR LEGEND:"), paint(ansiBlue, "INPUT"), paint(ansiCyan, "OUTPUT"),
-		paint(ansiGreen, "ASSERT/PASS"), paint(ansiYellow, "PROVES"))
+		paint(ansiGreen, "ASSERT/PASS"), paint(ansiYellow, "VERIFIES"))
 }
 
 func presence(present bool) string {

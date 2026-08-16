@@ -7,6 +7,8 @@ import (
 	"io"
 	"net"
 	"net/http"
+	"strconv"
+	"strings"
 	"time"
 
 	"github.com/suisbuds/rc_abc/internal/notification"
@@ -35,6 +37,7 @@ type Outcome struct {
 	Kind       OutcomeKind
 	HTTPStatus int
 	ErrorCode  ErrorCode
+	RetryAfter time.Duration
 }
 
 type Client struct {
@@ -69,7 +72,11 @@ func (c *Client) Deliver(ctx context.Context, task notification.Task) Outcome {
 	defer func() { _ = response.Body.Close() }()
 	_, _ = io.Copy(io.Discard, io.LimitReader(response.Body, maxResponseDrainBytes))
 
-	return classifyStatus(response.StatusCode)
+	outcome := classifyStatus(response.StatusCode)
+	if outcome.Kind == OutcomeRetryable {
+		outcome.RetryAfter = parseRetryAfter(response.Header.Get("Retry-After"), time.Now())
+	}
+	return outcome
 }
 
 func classifyStatus(statusCode int) Outcome {
@@ -88,4 +95,22 @@ func classifyStatus(statusCode int) Outcome {
 func isTimeout(err error) bool {
 	var networkError net.Error
 	return errors.As(err, &networkError) && networkError.Timeout()
+}
+
+func parseRetryAfter(value string, now time.Time) time.Duration {
+	value = strings.TrimSpace(value)
+	if value == "" {
+		return 0
+	}
+	if seconds, err := strconv.ParseInt(value, 10, 64); err == nil {
+		if seconds <= 0 || seconds > int64((time.Duration(1<<63-1))/time.Second) {
+			return 0
+		}
+		return time.Duration(seconds) * time.Second
+	}
+	retryAt, err := http.ParseTime(value)
+	if err != nil || !retryAt.After(now) {
+		return 0
+	}
+	return retryAt.Sub(now)
 }

@@ -2,6 +2,9 @@ package worker
 
 import (
 	"context"
+	"errors"
+	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -20,6 +23,7 @@ func TestProcessOneCompletesAccordingToDeliveryOutcome(t *testing.T) {
 	}{
 		{name: "success", attempt: 1, outcome: httpclient.Outcome{Kind: httpclient.OutcomeSucceeded, HTTPStatus: 204}, wantStatus: notification.StatusSucceeded},
 		{name: "retryable", attempt: 2, outcome: httpclient.Outcome{Kind: httpclient.OutcomeRetryable, HTTPStatus: 503, ErrorCode: httpclient.ErrorHTTPStatus}, wantStatus: notification.StatusRetryWait},
+		{name: "retry after", attempt: 2, outcome: httpclient.Outcome{Kind: httpclient.OutcomeRetryable, HTTPStatus: 429, ErrorCode: httpclient.ErrorHTTPStatus, RetryAfter: 10 * time.Second}, wantStatus: notification.StatusRetryWait},
 		{name: "permanent", attempt: 1, outcome: httpclient.Outcome{Kind: httpclient.OutcomePermanentFailure, HTTPStatus: 400, ErrorCode: httpclient.ErrorHTTPStatus}, wantStatus: notification.StatusDead},
 		{name: "retry limit", attempt: 3, outcome: httpclient.Outcome{Kind: httpclient.OutcomeRetryable, HTTPStatus: 503, ErrorCode: httpclient.ErrorHTTPStatus}, wantStatus: notification.StatusDead},
 	}
@@ -44,10 +48,48 @@ func TestProcessOneCompletesAccordingToDeliveryOutcome(t *testing.T) {
 			if repository.completion.Status != test.wantStatus {
 				t.Fatalf("completion status = %q, want %q", repository.completion.Status, test.wantStatus)
 			}
-			if test.wantStatus == notification.StatusRetryWait && !repository.completion.NextAttemptAt.Equal(now.Add(2*time.Second)) {
-				t.Fatalf("next attempt = %s, want %s", repository.completion.NextAttemptAt, now.Add(2*time.Second))
+			wantDelay := 2 * time.Second
+			if test.outcome.RetryAfter > wantDelay {
+				wantDelay = test.outcome.RetryAfter
+			}
+			if test.wantStatus == notification.StatusRetryWait && !repository.completion.NextAttemptAt.Equal(now.Add(wantDelay)) {
+				t.Fatalf("next attempt = %s, want %s", repository.completion.NextAttemptAt, now.Add(wantDelay))
 			}
 		})
+	}
+}
+
+func TestRunWaitsAfterCompletionError(t *testing.T) {
+	repository := &completionErrorRepository{
+		task:      notification.Task{ID: uuid.New(), AttemptCount: 1},
+		completed: make(chan struct{}),
+	}
+	worker := New(Config{
+		Repository: repository,
+		Deliverer:  &fakeDeliverer{outcome: httpclient.Outcome{Kind: httpclient.OutcomeSucceeded, HTTPStatus: 200}},
+		Logger:     zap.NewNop(), Concurrency: 1, PollInterval: 100 * time.Millisecond,
+		LeaseDuration: time.Minute, DeliveryTimeout: time.Second, MaxAttempts: 3,
+		Backoff: Backoff{Base: time.Second, Max: time.Minute},
+	})
+
+	ctx, cancel := context.WithCancel(context.Background())
+	done := make(chan struct{})
+	go func() {
+		worker.Run(ctx)
+		close(done)
+	}()
+	<-repository.completed
+	time.Sleep(20 * time.Millisecond)
+	if calls := repository.claimCalls.Load(); calls != 1 {
+		cancel()
+		<-done
+		t.Fatalf("Claim() calls = %d before poll interval elapsed, want 1", calls)
+	}
+	cancel()
+	select {
+	case <-done:
+	case <-time.After(time.Second):
+		t.Fatal("Run() did not stop while waiting after an error")
 	}
 }
 
@@ -111,6 +153,25 @@ func (r *fakeRepository) Complete(_ context.Context, completion notification.Com
 type fakeDeliverer struct {
 	outcome httpclient.Outcome
 	deliver func(context.Context, notification.Task) httpclient.Outcome
+}
+
+type completionErrorRepository struct {
+	task       notification.Task
+	claimCalls atomic.Int32
+	completed  chan struct{}
+	once       sync.Once
+}
+
+func (r *completionErrorRepository) Claim(context.Context, notification.ClaimRequest) (notification.Task, bool, error) {
+	r.claimCalls.Add(1)
+	return r.task, true, nil
+}
+
+func (r *completionErrorRepository) Complete(context.Context, notification.Completion) (bool, error) {
+	r.once.Do(func() {
+		close(r.completed)
+	})
+	return false, errors.New("database unavailable")
 }
 
 func (d *fakeDeliverer) Deliver(ctx context.Context, task notification.Task) httpclient.Outcome {

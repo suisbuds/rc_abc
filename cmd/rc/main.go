@@ -21,6 +21,8 @@ import (
 	"go.uber.org/zap"
 )
 
+const maxRequestHeaderBytes = 32 << 10
+
 func main() {
 	if err := run(); err != nil {
 		_, _ = fmt.Fprintln(os.Stderr, err)
@@ -88,6 +90,7 @@ func run() error {
 		ReadTimeout:       10 * time.Second,
 		WriteTimeout:      10 * time.Second,
 		IdleTimeout:       60 * time.Second,
+		MaxHeaderBytes:    maxRequestHeaderBytes,
 	}
 
 	serverErrors := make(chan error, 1)
@@ -97,7 +100,15 @@ func run() error {
 	}()
 	workerDone := make(chan struct{})
 	go func() {
-		logger.Info("notification workers started", zap.Int("concurrency", cfg.WorkerConcurrency))
+		logger.Info("notification workers started",
+			zap.Int("concurrency", cfg.WorkerConcurrency),
+			zap.Duration("poll_interval", cfg.PollInterval),
+			zap.Duration("delivery_timeout", cfg.DeliveryTimeout),
+			zap.Duration("lease_duration", cfg.LeaseDuration),
+			zap.Int("max_attempts", cfg.MaxAttempts),
+			zap.Duration("base_backoff", cfg.BaseBackoff),
+			zap.Duration("max_backoff", cfg.MaxBackoff),
+		)
 		notificationWorker.Run(ctx)
 		logger.Info("notification workers stopped")
 		close(workerDone)

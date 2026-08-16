@@ -6,7 +6,7 @@ Build a small internal service that accepts JSON HTTP notification jobs and deli
 
 ## Required reading
 
-- Read `docs/design.md` when it exists before changing architecture, delivery semantics, state transitions, persistence, or retry behavior.
+- Read `docs/DESIGN.md` when it exists before changing architecture, delivery semantics, state transitions, persistence, or retry behavior.
 - Use `.agents/skills/rc-mvp/SKILL.md` for implementation and verification tasks.
 
 ## Language
@@ -50,8 +50,8 @@ Build a small internal service that accepts JSON HTTP notification jobs and deli
 
 ## Documentation
 
-- `docs/design.md` contains the Chinese design Q&A and must distinguish current implementation, deliberate exclusions, and future evolution.
-- `docs/help.md` is user-authored. Do not modify it unless explicitly requested.
+- `docs/DESIGN.md` contains the Chinese design Q&A and must distinguish current implementation, deliberate exclusions, and future evolution.
+- `docs/HELP.md` is user-authored. Do not modify it unless explicitly requested.
 - When `docs/session/TEMPLATE.md` exists, write material task summaries under `docs/session/`.
 - Session notes are local audit material and must not contain secrets.
 
