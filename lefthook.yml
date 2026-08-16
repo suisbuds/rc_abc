@@ -1,0 +1,17 @@
+pre-commit:
+  parallel: true
+  jobs:
+    - name: format
+      run: make fmt-check
+    - name: unit-tests
+      run: make test-unit
+
+commit-msg:
+  jobs:
+    - name: conventional-commit
+      run: scripts/check-commit-msg.sh {1}
+
+pre-push:
+  jobs:
+    - name: verify
+      run: make verify

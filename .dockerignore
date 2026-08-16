@@ -1,0 +1,9 @@
+.git
+.github
+.agents
+.env
+.tools
+bin
+coverage.out
+docs/session
+tmp

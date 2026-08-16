@@ -1,0 +1,4 @@
+interface:
+  display_name: "RC MVP Workflow"
+  short_description: "Build and verify the RC notification service"
+  default_prompt: "Use $rc-mvp to implement and verify a scoped task in rc_abc."

@@ -1,0 +1,60 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:17-alpine
+        env:
+          POSTGRES_DB: rc
+          POSTGRES_USER: rc
+          POSTGRES_PASSWORD: rc
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U rc -d rc"
+          --health-interval 2s
+          --health-timeout 2s
+          --health-retries 15
+    env:
+      RC_DATABASE_URL: postgres://rc:rc@localhost:5432/rc?sslmode=disable
+      RC_API_TOKEN: ci-internal-token
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+      - name: Download dependencies
+        run: go mod download
+      - name: Install pinned quality tools
+        run: make tools
+      - name: Verify formatting
+        run: make fmt-check
+      - name: Run static analysis
+        run: make lint
+      - name: Run unit tests with race detector
+        run: make test-race
+      - name: Apply migrations
+        run: make migrate
+      - name: Run integration tests
+        run: make test-integration
+      - name: Check vulnerabilities
+        run: make vuln
+      - name: Scan secrets
+        run: make secrets
+      - name: Build binaries
+        run: make build
+      - name: Build container
+        run: make docker-build
