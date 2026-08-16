@@ -71,6 +71,17 @@ func TestClientDeliverClassifiesTimeoutAsRetryable(t *testing.T) {
 	}
 }
 
+func TestClientDeliverClassifiesInvalidRequestAsPermanent(t *testing.T) {
+	outcome := New(time.Second).Deliver(context.Background(), notification.Task{
+		TargetURL: "://invalid",
+		Method:    http.MethodPost,
+		Body:      json.RawMessage(`{}`),
+	})
+	if outcome.Kind != OutcomePermanentFailure || outcome.ErrorCode != ErrorInvalidRequest {
+		t.Fatalf("Deliver() = %+v, want permanent invalid request", outcome)
+	}
+}
+
 func TestClientDeliverDoesNotFollowRedirects(t *testing.T) {
 	var redirectTargetCalled atomic.Bool
 	redirectTarget := httptest.NewServer(http.HandlerFunc(func(http.ResponseWriter, *http.Request) {

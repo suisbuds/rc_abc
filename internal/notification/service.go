@@ -101,8 +101,8 @@ func (s *Service) normalize(request CreateRequest) (CreateRequest, error) {
 }
 
 func validateIdempotencyKey(key string) error {
-	if len(key) < 8 || len(key) > maxIdempotencyKeyLength || strings.TrimSpace(key) != key {
-		return fmt.Errorf("%w: Idempotency-Key must contain 8 to %d printable characters", ErrInvalidRequest, maxIdempotencyKeyLength)
+	if len(key) == 0 || len(key) > maxIdempotencyKeyLength {
+		return fmt.Errorf("%w: Idempotency-Key must contain 1 to %d printable characters", ErrInvalidRequest, maxIdempotencyKeyLength)
 	}
 	for _, character := range []byte(key) {
 		if character < 0x21 || character > 0x7e {

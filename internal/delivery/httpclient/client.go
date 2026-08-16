@@ -25,9 +25,10 @@ const (
 type ErrorCode string
 
 const (
-	ErrorTimeout    ErrorCode = "timeout"
-	ErrorNetwork    ErrorCode = "network_error"
-	ErrorHTTPStatus ErrorCode = "http_status"
+	ErrorInvalidRequest ErrorCode = "invalid_request"
+	ErrorTimeout        ErrorCode = "timeout"
+	ErrorNetwork        ErrorCode = "network_error"
+	ErrorHTTPStatus     ErrorCode = "http_status"
 )
 
 type Outcome struct {
@@ -52,7 +53,7 @@ func New(timeout time.Duration) *Client {
 func (c *Client) Deliver(ctx context.Context, task notification.Task) Outcome {
 	request, err := http.NewRequestWithContext(ctx, task.Method, task.TargetURL, bytes.NewReader(task.Body))
 	if err != nil {
-		return Outcome{Kind: OutcomePermanentFailure, ErrorCode: ErrorNetwork}
+		return Outcome{Kind: OutcomePermanentFailure, ErrorCode: ErrorInvalidRequest}
 	}
 	for name, value := range task.Headers {
 		request.Header.Set(name, value)

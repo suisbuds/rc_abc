@@ -127,7 +127,7 @@ func (w *Worker) processOne(ctx context.Context, owner string) (bool, error) {
 		w.logger.Warn("notification lease was lost before completion", zap.String("notification_id", task.ID.String()))
 		return true, nil
 	}
-	w.logger.Info("notification delivery completed",
+	w.logger.Info("notification delivery attempt finished",
 		zap.String("notification_id", task.ID.String()),
 		zap.String("status", string(completion.Status)),
 		zap.Int("attempt", task.AttemptCount),

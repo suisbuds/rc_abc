@@ -16,6 +16,9 @@ func TestServiceCreateBuildsPendingPostTask(t *testing.T) {
 	repository := mocks.NewMockRepository(controller)
 	repository.EXPECT().Create(gomock.Any(), gomock.Any()).DoAndReturn(
 		func(_ context.Context, task notification.Task) (notification.CreateResult, error) {
+			if task.IdempotencyKey != "evt-1" {
+				t.Fatalf("IdempotencyKey = %q, want evt-1", task.IdempotencyKey)
+			}
 			if task.Method != "POST" {
 				t.Fatalf("Method = %q, want POST", task.Method)
 			}
@@ -31,7 +34,7 @@ func TestServiceCreateBuildsPendingPostTask(t *testing.T) {
 
 	service := notification.NewService(repository, true)
 	task, created, err := service.Create(context.Background(), notification.CreateRequest{
-		IdempotencyKey: "billing:payment:12345",
+		IdempotencyKey: "evt-1",
 		TargetURL:      "http://receiver.test/events",
 		Headers:        map[string]string{"x-event-type": "payment.succeeded"},
 		Body:           json.RawMessage(`{"event_id":"evt-123"}`),
