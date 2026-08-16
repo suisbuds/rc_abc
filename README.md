@@ -1,72 +1,50 @@
 # rc_abc
 
-`rc_abc` is a minimal internal service for accepting JSON HTTP notification jobs and delivering them reliably to external HTTP(S) endpoints.
+## Introduction
 
-## Status
+Multiple internal business systems need to notify external vendors through HTTP(S) APIs when important events occur. Examples include:
 
-The service accepts authenticated JSON notification jobs, persists them idempotently in PostgreSQL, encrypts target headers with AES-256-GCM, and delivers them asynchronously with bounded retries. PostgreSQL leases and `FOR UPDATE SKIP LOCKED` coordinate workers and recover abandoned tasks; task status is available through the API.
+- notifying an advertising platform after a referred user registers;
+- notifying a CRM system to update a contact after a subscription payment succeeds;
+- notifying an inventory system after a product is purchased.
+
+Each vendor may use a different request URL, header format, and body format. The business systems do not need to consume the external API response; they only need the notification request to be delivered as reliably as possible.
+
+This project implements an internal service that accepts external HTTP notification requests from business systems and delivers them to the requested targets as reliably as possible.
 
 ## Prerequisites
 
 - Go 1.26.6 or newer
-- Docker-compatible container runtime
+- Docker-compatible container runtime, such as Docker Desktop or OrbStack
 
-## Quick start
+## Quick start and testing
 
-```bash
-cp .env.example .env
-make setup
-make up
-make migrate
-make run
-```
-
-Check the process:
+Run the complete single-host end-to-end test:
 
 ```bash
-curl http://localhost:8080/healthz
-curl http://localhost:8080/readyz
+make single-test
 ```
 
-Create a notification:
+This command starts the real API, PostgreSQL, migrations, workers, HTTP delivery client, and a controlled local supplier receiver. For every scenario it prints the sanitized input, actual HTTP output, assertion, and the capability proved by that result. Terminal output uses colors for input, output, passing assertions, explanations, and failures. Set `NO_COLOR=1` to disable colors or `FORCE_COLOR=1` to preserve them when output is redirected. The command verifies health and readiness checks, authentication, durable task acceptance, two `503` responses followed by a successful retry, task status queries, idempotent replay, idempotency conflicts, request validation, and missing-task handling. The expected final delivery result is `succeeded` with three attempts and a final HTTP status of `200`.
+
+Run the isolated large-scale test:
 
 ```bash
-curl -i http://localhost:8080/v1/notifications \
-  -H 'Authorization: Bearer replace-me' \
-  -H 'Idempotency-Key: billing:payment:12345' \
-  -H 'Content-Type: application/json' \
-  -d '{
-    "target_url": "https://receiver.example/events",
-    "headers": {"Authorization": "Bearer supplier-token"},
-    "body": {"event_id": "evt-123"}
-  }'
+make all-test
 ```
 
-The first accepted request returns `202`. Replaying the same request returns the existing task with `200`; changing the request while reusing the key returns `409`.
+The default run concurrently submits 1,000 unique notification tasks and waits for every task to finish. It prints one sanitized input/output/assertion line for each task, followed by accepted tasks, succeeded tasks, dead tasks, total delivery attempts, elapsed time, and the observed submission rate. Functional counts are asserted; timing and throughput are measured rather than fixed because they depend on the local machine.
 
-Query the returned task ID until it reaches `succeeded` or `dead`:
+The scale can be changed without editing the repository:
 
 ```bash
-curl -H 'Authorization: Bearer replace-me' \
-  http://localhost:8080/v1/notifications/00000000-0000-0000-0000-000000000000
+LOAD_TOTAL=5000 LOAD_CONCURRENCY=100 make all-test
 ```
 
-Delivery treats `2xx` as success. Network errors, timeouts, `408`, `429`, and `5xx` are retried with exponential backoff and jitter; other responses and exhausted retries end in `dead`.
-
-## Quality checks
+Both commands leave their isolated Compose environments running for inspection. Stop and remove both test environments and their local data with:
 
 ```bash
-make test
-make lint
-make verify
+make test-down
 ```
 
-## Local acceptance test
-
-Run the complete notification flow against the Compose PostgreSQL instance:
-
-```bash
-make test-e2e
-```
-
-The test starts PostgreSQL, applies migrations, runs the API and worker in process, and uses a local receiver that returns `503` twice and `200` on the third attempt. It verifies the final `succeeded` status and attempt count without accessing the public internet. Run `make down` afterward to stop PostgreSQL.
+The full-chain tests use real internal components and real HTTP requests. Only the external supplier boundary is replaced with a controlled receiver so that failure and success responses are deterministic. Unit tests elsewhere in the repository still use mocks for isolated package behavior.

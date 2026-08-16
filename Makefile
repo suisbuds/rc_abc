@@ -12,6 +12,7 @@ LOCAL_TEST_DATABASE_URL := postgres://rc:rc@localhost:5432/rc?sslmode=disable
 LOAD_ENV := set -a; if [ -f .env ]; then . ./.env; fi; set +a;
 
 .PHONY: help setup tools up down migrate migrate-down migrate-status run demo demo-down \
+	single-test single-test-down all-test all-test-down test-down \
 	fmt fmt-check generate generate-check lint test test-unit test-race test-integration \
 	test-e2e vuln secrets build docker-build verify ci agent-preflight
 
@@ -53,6 +54,20 @@ demo: ## Start the containerized demo stack.
 
 demo-down: ## Stop the demo stack and remove its volumes.
 	docker compose --profile demo down -v
+
+single-test: ## Start the stack and run the complete single-host end-to-end test.
+	scripts/run-system-test.sh single
+
+single-test-down: ## Stop the single-test stack and remove its local data.
+	docker compose -p $${RC_SINGLE_TEST_PROJECT:-rc_abc_single_test} --profile demo down -v
+
+all-test: ## Start an isolated stack and run the configurable large-scale test.
+	scripts/run-system-test.sh all
+
+all-test-down: ## Stop the all-test stack and remove its local data.
+	docker compose -p $${RC_ALL_TEST_PROJECT:-rc_abc_all_test} --profile demo down -v
+
+test-down: single-test-down all-test-down ## Stop both system-test stacks and remove their local data.
 
 fmt: ## Format Go source files.
 	gofmt -w $$(find . -name '*.go' -not -path './vendor/*')
