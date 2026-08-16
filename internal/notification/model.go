@@ -45,3 +45,20 @@ type CreateResult struct {
 	Created     bool
 	SameRequest bool
 }
+
+type ClaimRequest struct {
+	LeaseOwner  string
+	Now         time.Time
+	LeaseUntil  time.Time
+	MaxAttempts int
+}
+
+type Completion struct {
+	TaskID        uuid.UUID
+	LeaseOwner    string
+	Status        Status
+	NextAttemptAt time.Time
+	HTTPStatus    *int
+	LastError     *string
+	UpdatedAt     time.Time
+}

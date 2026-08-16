@@ -4,7 +4,7 @@
 
 ## Status
 
-The service accepts authenticated JSON notification jobs, persists them idempotently in PostgreSQL, encrypts target headers with AES-256-GCM, and exposes task status. Background HTTP delivery and retries are not implemented yet.
+The service accepts authenticated JSON notification jobs, persists them idempotently in PostgreSQL, encrypts target headers with AES-256-GCM, and delivers them asynchronously with bounded retries. PostgreSQL leases and `FOR UPDATE SKIP LOCKED` coordinate workers and recover abandoned tasks; task status is available through the API.
 
 ## Prerequisites
 
@@ -43,6 +43,15 @@ curl -i http://localhost:8080/v1/notifications \
 ```
 
 The first accepted request returns `202`. Replaying the same request returns the existing task with `200`; changing the request while reusing the key returns `409`.
+
+Query the returned task ID until it reaches `succeeded` or `dead`:
+
+```bash
+curl -H 'Authorization: Bearer replace-me' \
+  http://localhost:8080/v1/notifications/00000000-0000-0000-0000-000000000000
+```
+
+Delivery treats `2xx` as success. Network errors, timeouts, `408`, `429`, and `5xx` are retried with exponential backoff and jitter; other responses and exhausted retries end in `dead`.
 
 ## Quality checks
 

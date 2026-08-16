@@ -11,4 +11,6 @@ import (
 type Repository interface {
 	Create(context.Context, Task) (CreateResult, error)
 	Get(context.Context, uuid.UUID) (Task, error)
+	Claim(context.Context, ClaimRequest) (Task, bool, error)
+	Complete(context.Context, Completion) (bool, error)
 }

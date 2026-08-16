@@ -19,6 +19,11 @@ const notificationColumns = `
     attempt_count, next_attempt_at, last_http_status, last_error,
     created_at, updated_at`
 
+const claimedNotificationColumns = `
+    task.id, task.idempotency_key, task.target_url, task.method, task.headers, task.body, task.status,
+    task.attempt_count, task.next_attempt_at, task.last_http_status, task.last_error,
+    task.created_at, task.updated_at`
+
 type NotificationRepository struct {
 	pool         *pgxpool.Pool
 	headerCipher *HeaderCipher
@@ -82,6 +87,72 @@ func (r *NotificationRepository) Get(ctx context.Context, id uuid.UUID) (notific
 		return notification.Task{}, err
 	}
 	return task, nil
+}
+
+func (r *NotificationRepository) Claim(ctx context.Context, request notification.ClaimRequest) (notification.Task, bool, error) {
+	query := `WITH exhausted AS (
+        UPDATE notification_tasks
+        SET status = 'dead', lease_owner = NULL, lease_until = NULL,
+            next_attempt_at = $2, last_error = 'lease_expired_after_max_attempts', updated_at = $2
+        WHERE status = 'processing' AND lease_until <= $2 AND attempt_count >= $4
+    ), candidate AS (
+        SELECT id
+        FROM notification_tasks
+        WHERE attempt_count < $4 AND (
+            (status IN ('pending', 'retry_wait') AND next_attempt_at <= $2)
+            OR (status = 'processing' AND lease_until <= $2)
+        )
+        ORDER BY COALESCE(lease_until, next_attempt_at), created_at
+        FOR UPDATE SKIP LOCKED
+        LIMIT 1
+    )
+    UPDATE notification_tasks AS task
+    SET status = 'processing', attempt_count = task.attempt_count + 1,
+        lease_owner = $1, lease_until = $3, updated_at = $2
+    FROM candidate
+    WHERE task.id = candidate.id
+    RETURNING ` + claimedNotificationColumns
+
+	task, encryptedHeaders, err := scanNotification(r.pool.QueryRow(ctx, query,
+		request.LeaseOwner, request.Now, request.LeaseUntil, request.MaxAttempts,
+	))
+	if errors.Is(err, pgx.ErrNoRows) {
+		return notification.Task{}, false, nil
+	}
+	if err != nil {
+		return notification.Task{}, false, fmt.Errorf("claim notification task: %w", err)
+	}
+	task.Headers, err = r.headerCipher.Decrypt(task.ID, encryptedHeaders)
+	if err != nil {
+		return notification.Task{}, false, err
+	}
+	return task, true, nil
+}
+
+func (r *NotificationRepository) Complete(ctx context.Context, completion notification.Completion) (bool, error) {
+	if !validCompletionStatus(completion.Status) {
+		return false, fmt.Errorf("complete notification task: invalid status %q", completion.Status)
+	}
+	command, err := r.pool.Exec(ctx, `UPDATE notification_tasks
+        SET status = $3, next_attempt_at = $4, last_http_status = $5, last_error = $6,
+            lease_owner = NULL, lease_until = NULL, updated_at = $7
+        WHERE id = $1 AND status = 'processing' AND lease_owner = $2`,
+		completion.TaskID,
+		completion.LeaseOwner,
+		completion.Status,
+		completion.NextAttemptAt,
+		completion.HTTPStatus,
+		completion.LastError,
+		completion.UpdatedAt,
+	)
+	if err != nil {
+		return false, fmt.Errorf("complete notification task: %w", err)
+	}
+	return command.RowsAffected() == 1, nil
+}
+
+func validCompletionStatus(status notification.Status) bool {
+	return status == notification.StatusSucceeded || status == notification.StatusRetryWait || status == notification.StatusDead
 }
 
 func (r *NotificationRepository) loadIdempotencyConflict(ctx context.Context, candidate notification.Task) (notification.CreateResult, error) {

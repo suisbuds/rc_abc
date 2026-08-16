@@ -110,6 +110,108 @@ func TestNotificationRepositoryConcurrentCreateStoresOneTask(t *testing.T) {
 	}
 }
 
+func TestNotificationRepositoryClaimAllowsOnlyOneWorker(t *testing.T) {
+	pool := integrationPool(t)
+	repository := NewNotificationRepository(pool, integrationHeaderCipher(t))
+	created, err := repository.Create(context.Background(), integrationTask("claim:concurrent:123", `{"event_id":"evt-claim"}`))
+	if err != nil {
+		t.Fatalf("Create() error = %v", err)
+	}
+
+	now := time.Now().UTC()
+	requests := []notification.ClaimRequest{
+		{LeaseOwner: "worker-a", Now: now, LeaseUntil: now.Add(time.Minute), MaxAttempts: 3},
+		{LeaseOwner: "worker-b", Now: now, LeaseUntil: now.Add(time.Minute), MaxAttempts: 3},
+	}
+	var claimed atomic.Int32
+	var waitGroup sync.WaitGroup
+	for _, request := range requests {
+		waitGroup.Add(1)
+		go func() {
+			defer waitGroup.Done()
+			task, ok, claimErr := repository.Claim(context.Background(), request)
+			if claimErr != nil {
+				t.Errorf("Claim() error = %v", claimErr)
+				return
+			}
+			if ok {
+				claimed.Add(1)
+				if task.ID != created.Task.ID || task.AttemptCount != 1 {
+					t.Errorf("Claim() task = %+v, want created task at attempt 1", task)
+				}
+			}
+		}()
+	}
+	waitGroup.Wait()
+	if claimed.Load() != 1 {
+		t.Fatalf("claimed count = %d, want 1", claimed.Load())
+	}
+}
+
+func TestNotificationRepositoryRecoversExpiredLeaseAndRejectsStaleCompletion(t *testing.T) {
+	pool := integrationPool(t)
+	repository := NewNotificationRepository(pool, integrationHeaderCipher(t))
+	created, err := repository.Create(context.Background(), integrationTask("lease:recovery:123", `{"event_id":"evt-lease"}`))
+	if err != nil {
+		t.Fatalf("Create() error = %v", err)
+	}
+
+	now := time.Now().UTC()
+	first, ok, err := repository.Claim(context.Background(), notification.ClaimRequest{
+		LeaseOwner: "worker-old", Now: now, LeaseUntil: now.Add(time.Second), MaxAttempts: 3,
+	})
+	if err != nil || !ok {
+		t.Fatalf("first Claim() = (%+v, %v, %v), want task", first, ok, err)
+	}
+	second, ok, err := repository.Claim(context.Background(), notification.ClaimRequest{
+		LeaseOwner: "worker-new", Now: now.Add(2 * time.Second), LeaseUntil: now.Add(time.Minute), MaxAttempts: 3,
+	})
+	if err != nil || !ok || second.AttemptCount != 2 {
+		t.Fatalf("recovery Claim() = (%+v, %v, %v), want attempt 2", second, ok, err)
+	}
+
+	staleUpdated, err := repository.Complete(context.Background(), notification.Completion{
+		TaskID: created.Task.ID, LeaseOwner: "worker-old", Status: notification.StatusSucceeded,
+		NextAttemptAt: now, UpdatedAt: now,
+	})
+	if err != nil || staleUpdated {
+		t.Fatalf("stale Complete() = (%v, %v), want false without error", staleUpdated, err)
+	}
+	newUpdated, err := repository.Complete(context.Background(), notification.Completion{
+		TaskID: created.Task.ID, LeaseOwner: "worker-new", Status: notification.StatusSucceeded,
+		NextAttemptAt: now, UpdatedAt: now,
+	})
+	if err != nil || !newUpdated {
+		t.Fatalf("current Complete() = (%v, %v), want true", newUpdated, err)
+	}
+}
+
+func TestNotificationRepositoryExpiresLeaseAfterFinalAttempt(t *testing.T) {
+	pool := integrationPool(t)
+	repository := NewNotificationRepository(pool, integrationHeaderCipher(t))
+	created, err := repository.Create(context.Background(), integrationTask("lease:exhausted:123", `{"event_id":"evt-exhausted"}`))
+	if err != nil {
+		t.Fatalf("Create() error = %v", err)
+	}
+
+	now := time.Now().UTC()
+	if _, err := pool.Exec(context.Background(), `UPDATE notification_tasks
+		SET status = 'processing', attempt_count = 3, lease_owner = 'crashed-worker', lease_until = $2
+		WHERE id = $1`, created.Task.ID, now.Add(-time.Second)); err != nil {
+		t.Fatalf("prepare expired task: %v", err)
+	}
+	_, claimed, err := repository.Claim(context.Background(), notification.ClaimRequest{
+		LeaseOwner: "worker-new", Now: now, LeaseUntil: now.Add(time.Minute), MaxAttempts: 3,
+	})
+	if err != nil || claimed {
+		t.Fatalf("Claim() = (%v, %v), want no exhausted task", claimed, err)
+	}
+	stored, err := repository.Get(context.Background(), created.Task.ID)
+	if err != nil || stored.Status != notification.StatusDead || stored.AttemptCount != 3 {
+		t.Fatalf("Get() = (%+v, %v), want dead at attempt 3", stored, err)
+	}
+}
+
 func integrationPool(t *testing.T) *pgxpool.Pool {
 	t.Helper()
 	databaseURL := os.Getenv("RC_DATABASE_URL")

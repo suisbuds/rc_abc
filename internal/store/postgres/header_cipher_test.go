@@ -46,7 +46,12 @@ func TestHeaderCipherRejectsWrongTaskAndTampering(t *testing.T) {
 	if err := json.Unmarshal(encrypted, &envelope); err != nil {
 		t.Fatalf("Unmarshal() error = %v", err)
 	}
-	envelope.Ciphertext = envelope.Ciphertext[:len(envelope.Ciphertext)-1] + "A"
+	ciphertext, err := base64.StdEncoding.DecodeString(envelope.Ciphertext)
+	if err != nil {
+		t.Fatalf("DecodeString() error = %v", err)
+	}
+	ciphertext[0] ^= 1
+	envelope.Ciphertext = base64.StdEncoding.EncodeToString(ciphertext)
 	tampered, err := json.Marshal(envelope)
 	if err != nil {
 		t.Fatalf("Marshal() error = %v", err)

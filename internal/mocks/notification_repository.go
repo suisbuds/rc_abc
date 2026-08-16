@@ -42,6 +42,37 @@ func (m *MockRepository) EXPECT() *MockRepositoryMockRecorder {
 	return m.recorder
 }
 
+// Claim mocks base method.
+func (m *MockRepository) Claim(arg0 context.Context, arg1 notification.ClaimRequest) (notification.Task, bool, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "Claim", arg0, arg1)
+	ret0, _ := ret[0].(notification.Task)
+	ret1, _ := ret[1].(bool)
+	ret2, _ := ret[2].(error)
+	return ret0, ret1, ret2
+}
+
+// Claim indicates an expected call of Claim.
+func (mr *MockRepositoryMockRecorder) Claim(arg0, arg1 any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Claim", reflect.TypeOf((*MockRepository)(nil).Claim), arg0, arg1)
+}
+
+// Complete mocks base method.
+func (m *MockRepository) Complete(arg0 context.Context, arg1 notification.Completion) (bool, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "Complete", arg0, arg1)
+	ret0, _ := ret[0].(bool)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// Complete indicates an expected call of Complete.
+func (mr *MockRepositoryMockRecorder) Complete(arg0, arg1 any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Complete", reflect.TypeOf((*MockRepository)(nil).Complete), arg0, arg1)
+}
+
 // Create mocks base method.
 func (m *MockRepository) Create(arg0 context.Context, arg1 notification.Task) (notification.CreateResult, error) {
 	m.ctrl.T.Helper()
