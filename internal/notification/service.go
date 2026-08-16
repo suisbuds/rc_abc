@@ -136,7 +136,7 @@ func normalizeHeaders(input map[string]string) (map[string]string, error) {
 	totalBytes := 0
 	for name, value := range input {
 		canonicalName := textproto.CanonicalMIMEHeaderKey(name)
-		if !validHeaderName(name) || strings.ContainsAny(value, "\r\n") || isForbiddenHeader(canonicalName) {
+		if !validHeaderName(name) || !validHeaderValue(value) || isForbiddenHeader(canonicalName) {
 			return nil, fmt.Errorf("%w: target header %q is not allowed", ErrInvalidRequest, name)
 		}
 		if _, exists := result[canonicalName]; exists {
@@ -160,6 +160,15 @@ func validHeaderName(name string) bool {
 			(character < '0' || character > '9') &&
 			(character < 'A' || character > 'Z') &&
 			(character < 'a' || character > 'z') {
+			return false
+		}
+	}
+	return true
+}
+
+func validHeaderValue(value string) bool {
+	for _, character := range []byte(value) {
+		if (character < 0x20 && character != '\t') || character == 0x7f {
 			return false
 		}
 	}

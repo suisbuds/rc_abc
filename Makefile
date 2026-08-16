@@ -88,7 +88,7 @@ test-e2e: up ## Run the complete local end-to-end test with PostgreSQL.
 vuln: ## Check Go dependencies for known vulnerabilities.
 	$(TOOLS_DIR)/govulncheck ./...
 
-secrets: ## Scan the working tree for secrets.
+secrets: ## Scan the working tree and Git history for secrets.
 	$(TOOLS_DIR)/gitleaks dir --no-banner --redact --config .gitleaks.toml .
 	$(TOOLS_DIR)/gitleaks git --no-banner --redact --config .gitleaks.toml .
 

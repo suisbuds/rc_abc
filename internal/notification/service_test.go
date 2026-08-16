@@ -59,6 +59,7 @@ func TestServiceCreateRejectsUnsafeInput(t *testing.T) {
 		{name: "plain HTTP", request: withKey(validRequest("http://receiver.test/events"))},
 		{name: "URL user info", request: withKey(validRequest("https://user:pass@receiver.test/events"))},
 		{name: "hop by hop header", request: withHeader(withKey(validRequest("https://receiver.test/events")), "Connection", "close")},
+		{name: "control character in header value", request: withHeader(withKey(validRequest("https://receiver.test/events")), "X-Event-Type", "paid\x00event")},
 		{name: "invalid JSON", request: withBody(withKey(validRequest("https://receiver.test/events")), `{`)},
 	}
 
