@@ -20,7 +20,7 @@ func (b Backoff) Delay(attempt int, random float64) time.Duration {
 		delay *= 2
 	}
 	if delay >= b.Max {
-		return b.Max
+		return time.Duration(float64(b.Max) * (0.8 + 0.2*random))
 	}
 
 	jittered := time.Duration(float64(delay) * (0.8 + 0.4*random))

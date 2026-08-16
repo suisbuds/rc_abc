@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -67,5 +68,29 @@ func TestClientDeliverClassifiesTimeoutAsRetryable(t *testing.T) {
 	})
 	if outcome.Kind != OutcomeRetryable || outcome.ErrorCode != ErrorTimeout {
 		t.Fatalf("Deliver() = %+v, want retryable timeout", outcome)
+	}
+}
+
+func TestClientDeliverDoesNotFollowRedirects(t *testing.T) {
+	var redirectTargetCalled atomic.Bool
+	redirectTarget := httptest.NewServer(http.HandlerFunc(func(http.ResponseWriter, *http.Request) {
+		redirectTargetCalled.Store(true)
+	}))
+	defer redirectTarget.Close()
+	redirectSource := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		http.Redirect(w, &http.Request{}, redirectTarget.URL, http.StatusFound)
+	}))
+	defer redirectSource.Close()
+
+	outcome := New(time.Second).Deliver(context.Background(), notification.Task{
+		TargetURL: redirectSource.URL,
+		Method:    http.MethodPost,
+		Body:      json.RawMessage(`{}`),
+	})
+	if redirectTargetCalled.Load() {
+		t.Fatal("Deliver() followed a redirect to another target")
+	}
+	if outcome.Kind != OutcomePermanentFailure || outcome.HTTPStatus != http.StatusFound {
+		t.Fatalf("Deliver() = %+v, want permanent redirect failure", outcome)
 	}
 }

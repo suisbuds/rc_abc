@@ -8,6 +8,7 @@ MOCKGEN_VERSION := v0.6.0
 GOLANGCI_LINT_VERSION := v2.12.2
 GOVULNCHECK_VERSION := v1.7.0
 GITLEAKS_VERSION := v8.30.1
+LOCAL_TEST_DATABASE_URL := postgres://rc:rc@localhost:5432/rc?sslmode=disable
 LOAD_ENV := set -a; if [ -f .env ]; then . ./.env; fi; set +a;
 
 .PHONY: help setup tools up down migrate migrate-down migrate-status run demo demo-down \
@@ -30,7 +31,7 @@ tools: ## Download pinned Go tools.
 	GOBIN=$(TOOLS_DIR) go install github.com/zricethezav/gitleaks/v8@$(GITLEAKS_VERSION)
 
 up: ## Start PostgreSQL for local development.
-	docker compose up -d postgres
+	docker compose up -d --wait postgres
 
 down: ## Stop local containers.
 	docker compose down
@@ -80,8 +81,9 @@ test-race: ## Run unit tests with the race detector.
 test-integration: ## Run PostgreSQL integration tests.
 	go test -tags=integration ./...
 
-test-e2e: ## Run end-to-end tests.
-	go test -tags=e2e ./...
+test-e2e: up ## Run the complete local end-to-end test with PostgreSQL.
+	RC_DATABASE_URL=$(LOCAL_TEST_DATABASE_URL) go run ./cmd/rc migrate up
+	RC_ENV=test RC_DATABASE_URL=$(LOCAL_TEST_DATABASE_URL) go test -tags=e2e ./tests/e2e
 
 vuln: ## Check Go dependencies for known vulnerabilities.
 	$(TOOLS_DIR)/govulncheck ./...

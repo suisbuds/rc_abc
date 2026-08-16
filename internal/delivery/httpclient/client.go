@@ -42,7 +42,12 @@ type Client struct {
 }
 
 func New(timeout time.Duration) *Client {
-	return &Client{httpClient: &http.Client{Timeout: timeout}}
+	return &Client{httpClient: &http.Client{
+		Timeout: timeout,
+		CheckRedirect: func(*http.Request, []*http.Request) error {
+			return http.ErrUseLastResponse
+		},
+	}}
 }
 
 func (c *Client) Deliver(ctx context.Context, task notification.Task) Outcome {

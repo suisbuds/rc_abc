@@ -61,6 +61,16 @@ make lint
 make verify
 ```
 
+## Local acceptance test
+
+Run the complete notification flow against the Compose PostgreSQL instance:
+
+```bash
+make test-e2e
+```
+
+The test starts PostgreSQL, applies migrations, runs the API and worker in process, and uses a local receiver that returns `503` twice and `200` on the third attempt. It verifies the final `succeeded` status and attempt count without accessing the public internet. Run `make down` afterward to stop PostgreSQL.
+
 ## Documentation
 
 - `docs/design.md`: design decisions and trade-offs

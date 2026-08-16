@@ -111,19 +111,31 @@ func run() error {
 		if err := server.Shutdown(shutdownCtx); err != nil {
 			return fmt.Errorf("shutdown http server: %w", err)
 		}
-		select {
-		case <-workerDone:
-		case <-shutdownCtx.Done():
-			return fmt.Errorf("drain notification workers: %w", shutdownCtx.Err())
+		if err := waitForWorker(workerDone, shutdownTimeout); err != nil {
+			return err
 		}
 		logger.Info("http server stopped")
 		return nil
 	case err := <-serverErrors:
 		stop()
-		<-workerDone
+		shutdownTimeout := max(10*time.Second, cfg.DeliveryTimeout+5*time.Second)
+		if drainErr := waitForWorker(workerDone, shutdownTimeout); drainErr != nil {
+			return errors.Join(fmt.Errorf("serve http: %w", err), drainErr)
+		}
 		if errors.Is(err, http.ErrServerClosed) {
 			return nil
 		}
 		return fmt.Errorf("serve http: %w", err)
+	}
+}
+
+func waitForWorker(done <-chan struct{}, timeout time.Duration) error {
+	timer := time.NewTimer(timeout)
+	defer timer.Stop()
+	select {
+	case <-done:
+		return nil
+	case <-timer.C:
+		return fmt.Errorf("drain notification workers: timed out after %s", timeout)
 	}
 }
